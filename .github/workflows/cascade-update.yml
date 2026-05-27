@@ -1,4 +1,5 @@
 name: Cascade Update from Atom
+# Triggered by atom releases via repository_dispatch
 
 on:
   repository_dispatch:
