@@ -1,5 +1,5 @@
 module "cluster" {
-  source = "git::https://github.com/PlatformStackPulse/tf-atom-ecs-cluster-aws.git?ref=v1.1.0"
+  source = "git::https://github.com/PlatformStackPulse/tf-atom-ecs-cluster-aws.git?ref=v1.2.0"
 
   enabled   = module.this.enabled
   namespace = var.namespace
