@@ -3,9 +3,66 @@
 [![CI](https://github.com/PlatformStackPulse/tf-molecule-ecs-fargate-service-aws/actions/workflows/ci.yml/badge.svg)](https://github.com/PlatformStackPulse/tf-molecule-ecs-fargate-service-aws/actions/workflows/ci.yml)
 ![Terraform](https://img.shields.io/badge/terraform-%3E%3D1.6.0-blueviolet)
 
-## Purpose
+Production-ready ECS Fargate service on AWS — provisions the cluster, task definition, and long-running service as a single composable tf-label module.
 
-Production ECS Fargate service with cluster, task definition, and service. Includes circuit breaker, deployment configuration, and optional load balancer integration.
+## Features
+
+- **Full Fargate stack in one module** — composes the `tf-atom-ecs-cluster-aws`, `tf-atom-ecs-task-definition-aws`, and `tf-atom-ecs-service-aws` atoms into a cluster + task definition + service.
+- **Fargate launch type** with `awsvpc` networking (subnets, security groups, optional public IP).
+- **Safe deployments** — deployment circuit breaker with automatic rollback enabled, plus configurable minimum-healthy-percent and maximum-percent.
+- **Optional load balancer integration** via `load_balancer_config` (target group, container name, container port) and a health-check grace period.
+- **Container Insights** on the cluster, toggleable via `container_insights_enabled`.
+- **ECS Exec support** for debugging (`enable_execute_command`).
+- **tf-label naming/tagging** — consistent `namespace`/`stage`/`name` identity and tags across every resource, with the standard `enabled` switch to create nothing.
+
+## Usage
+
+```hcl
+module "fargate_service" {
+  source = "git::https://github.com/PlatformStackPulse/tf-molecule-ecs-fargate-service-aws.git?ref=v1.0.0"
+
+  namespace = "eg"
+  stage     = "prod"
+  name      = "api"
+
+  # Networking (required)
+  subnet_ids         = ["subnet-0123456789abcdef0", "subnet-0123456789abcdef1"]
+  security_group_ids = ["sg-0123456789abcdef0"]
+
+  # Task sizing
+  cpu    = "512"
+  memory = "1024"
+
+  # Container definitions (required — valid JSON)
+  container_definitions = jsonencode([
+    {
+      name      = "app"
+      image     = "public.ecr.aws/nginx/nginx:latest"
+      essential = true
+      portMappings = [
+        {
+          containerPort = 80
+          hostPort      = 80
+          protocol      = "tcp"
+        }
+      ]
+    }
+  ])
+
+  desired_count = 2
+
+  # Optional: attach to a load balancer target group
+  load_balancer_config = {
+    target_group_arn = "arn:aws:elasticloadbalancing:eu-west-1:123456789012:targetgroup/eg-prod-api/0123456789abcdef"
+    container_name   = "app"
+    container_port   = 80
+  }
+
+  tags = {
+    Team = "platform"
+  }
+}
+```
 
 ## Module Documentation
 
@@ -82,3 +139,26 @@ No resources.
 | <a name="output_service_name"></a> [service\_name](#output\_service\_name) | Name of the ECS service |
 | <a name="output_task_definition_arn"></a> [task\_definition\_arn](#output\_task\_definition\_arn) | ARN of the task definition |
 <!-- END_TF_DOCS -->
+
+## Tests
+
+Unit tests use the Terraform test framework with a **mocked AWS provider**, so
+they need no AWS credentials and make no real API calls. They run `terraform plan`
+and assert on plan-known values (the tf-label id, which is config-set as the
+cluster and service name).
+
+```bash
+# Unit tests (mocked provider, no AWS needed)
+make test-unit
+# or directly:
+terraform init -backend=false
+terraform test -test-directory=tests/unit -verbose
+
+# Integration tests (requires real AWS credentials)
+make test-integration
+# or directly:
+terraform test -test-directory=tests/integration -verbose
+```
+
+Unit tests live in `tests/unit/` and run automatically in CI on every push and
+pull request.
